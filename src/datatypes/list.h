@@ -153,7 +153,7 @@ struct rootsim_list {
  * @param list a pointer to a list created using the <new_list>() macro.
  */
 #define node_payload(list, node) ({\
-			struct rootsim_list_node *__headptr = ((struct rootsim_list *)node);\
+			struct rootsim_list_node *__headptr = ((struct rootsim_list_node *)node);\
 			__typeof__(list) __dataptr = (__typeof__(list))(__headptr == NULL ? NULL : __headptr->data);\
 			__dataptr;\
 			})
