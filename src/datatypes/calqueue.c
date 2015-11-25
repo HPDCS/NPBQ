@@ -52,7 +52,7 @@ static void localinit(int qbase, int nbucks, double bwidth, double startprio) {
 	// Setup initial position in queue
 	lastprio = startprio;
 	n = (long)((double)startprio / cwidth);	// Virtual bucket
-	lastbucket = n % nbuckets;
+	lastbucket = (int) (n % nbuckets);
 	buckettop = (double)(n + 1) * cwidth + 0.5 * cwidth;
 
 	// Setup queue-size-change thresholds
