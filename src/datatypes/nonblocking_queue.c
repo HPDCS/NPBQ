@@ -667,7 +667,7 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
  *
  * @return a pointer a new queue
  */
-nonblocking_queue* queue_init(unsigned int queue_size, double bucket_width)
+nonblocking_queue* queue_init(unsigned int queue_size, double bucket_width, unsigned int collaborative_todo_list)
 {
 	unsigned int i = 0;
 
@@ -696,7 +696,7 @@ nonblocking_queue* queue_init(unsigned int queue_size, double bucket_width)
 	res->todo_list->counter = 0;
 	res->todo_list->next = get_marked(res->tail);
 	res->current = ((unsigned long long) queue_size-1) << 32;
-	res->expanding_state = 0;
+	res->collaborative_todo_list = collaborative_todo_list;
 	res->init_size = queue_size;
 
 	for (i = 0; i < queue_size; i++)
@@ -733,19 +733,21 @@ bool enqueue(nonblocking_queue* queue, double timestamp, void* payload)
 	// Collaborate in emptying the todo_list
 
 	// empty the to do list
-	bucket_node *tmp;
-	bucket_node *tail;
-
-	tail = queue->tail;
-	tmp = queue->todo_list;
-	tmp = tmp->next;
-	while (get_unmarked(tmp) != tail)
+	if(queue->collaborative_todo_list)
 	{
-		empty_todo_list(queue);
+		bucket_node *tmp;
+		bucket_node *tail;
+
+		tail = queue->tail;
 		tmp = queue->todo_list;
 		tmp = tmp->next;
+		while (get_unmarked(tmp) != tail)
+		{
+			empty_todo_list(queue);
+			tmp = queue->todo_list;
+			tmp = tmp->next;
+		}
 	}
-
 	return res;
 }
 

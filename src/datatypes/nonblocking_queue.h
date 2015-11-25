@@ -71,7 +71,7 @@ struct nonblocking_queue
 	//char pad5[60];
 	volatile unsigned int dequeue_size;
 	//char pad6[60];
-	volatile unsigned int expanding_state;
+	volatile unsigned int collaborative_todo_list;
 	char pad7[56];
 	bucket_node * volatile todo_list;
 	char pad8[56];
@@ -89,6 +89,6 @@ struct nonblocking_queue
 extern bool enqueue(nonblocking_queue *queue, double timestamp, void* payload);
 extern bucket_node* dequeue(nonblocking_queue *queue);
 extern double prune(nonblocking_queue *queue, double timestamp);
-extern nonblocking_queue* queue_init(unsigned int size, double bucket_width);
+extern nonblocking_queue* queue_init(unsigned int size, double bucket_width, unsigned int collaborative_todo_list);
 
 #endif /* DATATYPES_NONBLOCKING_QUEUE_H_ */

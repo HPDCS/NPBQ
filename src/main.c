@@ -59,7 +59,7 @@ unsigned int VERBOSE;		// if 1 prints a full log on STDOUT and on individual fil
 unsigned int LOG;			// = 0;
 double PRUNE_TRESHOLD;		// = 0.35;
 double BUCKET_WIDTH;		// = 1.0;//0.000976563;
-
+unsigned int COLLABORATIVE_TODO_LIST;
 
 unsigned int *id;
 volatile long long *ops;
@@ -379,9 +379,9 @@ int main(int argc, char **argv)
 {
 	int par = 1;
 
-	if(argc != 13)
+	if(argc != 14)
 	{
-		printf("Missing parameters %d vs 13\n", argc);
+		printf("Missing parameters %d vs 14\n", argc);
 		exit(1);
 	}
 
@@ -400,6 +400,7 @@ int main(int argc, char **argv)
 	LOG = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
 	PRUNE_TRESHOLD = strtod(argv[par++], (char **)NULL);
 	BUCKET_WIDTH = strtod(argv[par++], (char **)NULL);
+	COLLABORATIVE_TODO_LIST = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
 
 	id = (unsigned int*) malloc(THREADS*sizeof(unsigned int));
 	ops = (long long*) malloc(THREADS*sizeof(long long));
@@ -426,6 +427,7 @@ printf("LK_AHD:%f,", LOOK_AHEAD);
 //printf("LOG_PERIOD:%u\n", LOG_PERIOD);
 printf("SIZE:%u,", INIT_SIZE);
 printf("B_WIDTH:%f,", BUCKET_WIDTH);
+printf("COLLABORATIVE_TODO_LIST:%u,", COLLABORATIVE_TODO_LIST);
 
 
 	unsigned int i = 0;
@@ -434,7 +436,7 @@ printf("B_WIDTH:%f,", BUCKET_WIDTH);
 	mm_init(512, sizeof(bucket_node), false);
 
 	if(DATASTRUCT == 'N')
-		nbqueue = queue_init(INIT_SIZE, BUCKET_WIDTH);
+		nbqueue = queue_init(INIT_SIZE, BUCKET_WIDTH, COLLABORATIVE_TODO_LIST);
 	else if(DATASTRUCT == 'L')
 	{
 		lqueue = new_list(bucket_node);
