@@ -26,19 +26,19 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: NBQueue
+all: NBPQueue
 
 # Tool invocations
-NBQueue: $(OBJS) $(USER_OBJS)
+NBPQueue: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: Cross GCC Linker'
-	gcc  -o "NBQueue" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc  -o "NBPQueue" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) NBQueue
+	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) NBPQueue
 	-@echo ' '
 
 .PHONY: all clean dependents

@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <math.h>
 
 #include <pthread.h>
 #include <stdarg.h>
@@ -35,12 +36,14 @@
 
 #include "mm/myallocator.h"
 
+#define SAFETY_CHECK 0
 
 nonblocking_queue* nbqueue;
 list(bucket_node) lqueue;
 
 int payload = 0;
 struct timeval startTV;
+volatile double GVT = 0.0;
 
 char		DATASTRUCT;
 unsigned int TOTAL_OPS;		// = 800000;
@@ -163,6 +166,26 @@ void* process(void *arg)
 					test_log(my_id, "%u-%d:%d\tDEQUEUE %.15f - %d\n", my_id, diff.tv_sec, diff.tv_usec, timestamp, counter);
 
 				array[my_id] = timestamp;
+
+#if SAFETY_CHECK == 1
+				if(timestamp < GVT)
+				{
+					printf("%u - %d:%d ERRORE timestamp:%f > GVT:%f\n",
+							my_id, (int)diff.tv_sec, (int)diff.tv_usec, timestamp, GVT);
+					exit(1);
+				}
+				unsigned int j =0;
+				for(;j<THREADS;j++)
+				{
+					double tmp;
+					do
+						tmp = array[j];
+					while( tmp < timestamp || ( D_EQUAL(timestamp, tmp) && j < my_id) );
+				}
+				GVT = timestamp;
+#endif
+
+
 				local_min = timestamp;
 			}
 			if(counter == 0)
@@ -341,6 +364,7 @@ void* process(void *arg)
 
 
 	ops[my_id] = n_dequeue - n_enqueue;
+	array[my_id] = INFTY;
 
 	if( VERBOSE )
 	{

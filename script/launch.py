@@ -53,7 +53,7 @@ ops*=max(all_threads)
 cmd1="time"
 cmd2="-f"
 cmd3="R:%e,U:%U,S:%S"
-cmd4="../Debug/NBQueue"
+cmd4="../Debug/NBPQueue"
 tmp_dir="tmp"
 
 
