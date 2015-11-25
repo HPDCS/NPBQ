@@ -24,7 +24,7 @@
  *  Created on: July 13, 2015
  *  Author: Romolo Marotta
  */
-#include "../datatypes/nonblocking_queue.h"
+
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -37,6 +37,7 @@
 
 #include "../arch/atomic.h"
 #include "../mm/myallocator.h"
+#include "../datatypes/nonblocking_queue.h"
 
 __thread bucket_node *to_free_pointers = NULL;
 __thread unsigned int  lid;
@@ -44,6 +45,8 @@ __thread unsigned int  mark;
 
 #define USE_MACRO 1
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
 
 /**
  * This function calls a machine instruction that in O(1) finds the first set bit
@@ -274,7 +277,7 @@ static void error(const char *msg, ...) {
 static inline void connect_to_be_freed_list(nonblocking_queue *queue, bucket_node *start, unsigned int counter)
 {
 	start->payload = to_free_pointers;
-	start->queue = queue;
+	//start->queue = queue;
 	start->counter = counter;
 	to_free_pointers = start;
 }
@@ -282,7 +285,7 @@ static inline void connect_to_be_freed_list(nonblocking_queue *queue, bucket_nod
 #define connect_to_be_freed_list(queue, start, counterm)\
 {\
 	(start)->payload = to_free_pointers;\
-	(start)->queue   = (queue);\
+	/*(start)->queue   = (queue);*/\
 	(start)->counter = (counterm);\
 	to_free_pointers = (start);\
 }
@@ -682,7 +685,7 @@ nonblocking_queue* queue_init(unsigned int queue_size, double bucket_width)
 	memset(res->hashtable[0], 0, sizeof(bucket_node) * queue_size);
 
 	res->dequeue_size = queue_size;
-	res->tail = node_malloc(NULL, -2.0);
+	res->tail = node_malloc(NULL, -4.0);
 	res->tail->next = NULL;
 	res->tail->counter = 0;
 	res->bucket_width = bucket_width;
@@ -930,7 +933,10 @@ double prune(nonblocking_queue *queue, double timestamp)
 	while(*tmp_previous != NULL)
 	{
 		to_remove_node = *tmp_previous;
-		if(queue == to_remove_node->queue && hash(to_remove_node->timestamp, queue->bucket_width) < end_index)
+		if(
+				//queue == to_remove_node->queue &&
+				hash(to_remove_node->timestamp, queue->bucket_width) < end_index
+		)
 		{
 			*tmp_previous = (bucket_node*)(to_remove_node->payload);
 			counter = to_remove_node->counter;
@@ -952,3 +958,5 @@ double prune(nonblocking_queue *queue, double timestamp)
 
 	return committed;
 }
+
+#pragma GCC diagnostic pop
