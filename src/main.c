@@ -379,9 +379,9 @@ int main(int argc, char **argv)
 {
 	int par = 1;
 
-	if(argc != 15)
+	if(argc != 13)
 	{
-		printf("Missing parameters\n");
+		printf("Missing parameters %d vs 13\n", argc);
 		exit(1);
 	}
 
