@@ -479,7 +479,7 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 			tmp = tmp_node->next;
 			new_node->next = tmp;
 		}
-		while(tmp == NULL);
+		while(is_marked(tmp));
 
 		index = hash(new_node->timestamp, queue->bucket_width);
 	} while (index >= tmp_size
