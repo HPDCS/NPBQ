@@ -602,14 +602,13 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 			mm_free(tmp_new_heads);
 
 		tmp = queue->todo_list;
-		if((tmp == NULL || tmp->counter < old_size))
+		if(tmp->counter < old_size)
 
 			if(CAS_x86(
 					(unsigned long long*) &queue->todo_list,
 					(unsigned long long)  tmp,
 					(unsigned long long)  future
 				))
-				if(tmp != NULL)
 					connect_to_be_freed_list(queue, tmp, 1);
 
 
@@ -641,18 +640,6 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 					(unsigned long long)  get_marked(tmp_next)
 			)
 	);
-
-
-//	do
-//	{
-//		tmp = queue->todo_list;
-//		tmp_next = get_unmarked(tmp->next);
-//	}
-//	while(tmp->counter == 0 && !CAS_x86(&queue->todo_list, tmp, tmp_next));
-
-
-	//			old_ending_slot = queue->ending_slot;
-	//			queue->ending_slot = size - 1;
 
 	// empty the to do list
 	tmp = queue->todo_list->next;
@@ -698,13 +685,13 @@ nonblocking_queue* queue_init(unsigned int queue_size, double bucket_width)
 	res->tail = node_malloc(NULL, -2.0);
 	res->tail->next = NULL;
 	res->tail->counter = 0;
-	res->todo_list = NULL;//res->tail;
 	res->bucket_width = bucket_width;
-	//res->endnode = node_malloc(NULL, INFTY);
-	//res->endnode->next = res->endnode;
 	res->future_list = node_malloc(NULL, -4.0);
 	res->future_list->counter = queue_size;
 	res->future_list->next = res->tail;
+	res->todo_list = node_malloc(NULL, -4.0);
+	res->todo_list->counter = 0;
+	res->todo_list->next = get_marked(res->tail);
 	res->current = ((unsigned long long) queue_size-1) << 32;
 	res->expanding_state = 0;
 	res->init_size = queue_size;
@@ -748,15 +735,14 @@ bool enqueue(nonblocking_queue* queue, double timestamp, void* payload)
 
 	tail = queue->tail;
 	tmp = queue->todo_list;
-	if(tmp != NULL)
+	tmp = tmp->next;
+	while (get_unmarked(tmp) != tail)
 	{
+		empty_todo_list(queue);
+		tmp = queue->todo_list;
 		tmp = tmp->next;
-		while (get_unmarked(tmp) != tail)
-		{
-			empty_todo_list(queue);
-			tmp = queue->todo_list->next;
-		}
 	}
+
 	return res;
 }
 
