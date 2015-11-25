@@ -379,6 +379,13 @@ int main(int argc, char **argv)
 {
 	int par = 1;
 
+	if(argc != 15)
+	{
+		printf("Missing parameters\n");
+		exit(1);
+	}
+
+
 	DATASTRUCT = argv[par++][0];
 	TOTAL_OPS = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
 	THREADS  = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
