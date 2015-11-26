@@ -41,12 +41,15 @@ look_pool = [1.0,10.0]
 data_type = ["C", "N"]#["N", "L"]#, "C"]
 iterations = 1
 
-init_size=32768
 verbose=0
 log=0
+
+init_size=32768
 prune_period=50000
 prune_tresh=0.9
 width=1.0
+collaborative = 0
+safety = 0
 
 ops*=max(all_threads)
 
@@ -143,7 +146,7 @@ if __name__ == "__main__":
 				for t in threads:
 					if not test_pool.has_key(t):
 						test_pool[t] = []
-					test_pool[t] += [[struct, ops, str(t),      prune_period, prob_roll, prob_dequeue, look,      init_size,  verbose,  log,  prune_tresh,   width, str(run)]]
+					test_pool[t] += [[struct, ops, str(t),      prune_period, prob_roll, prob_dequeue, look,      init_size,  verbose,  log,  prune_tresh,   width, str(collaborative), str(safety), str(run)]]
 					count_test +=1
 					#	  		 STRUCT	 OPS, THREADS PRUNE_PERIOD  PROB_ROLL  PROB_DEQUEUE  LOOK_AHEAD INIT_SIZE   VERBOSE   LOG   PRUNE_TRESHOLD BUCKET_WIDTH
 

@@ -36,7 +36,6 @@
 
 #include "mm/myallocator.h"
 
-#define SAFETY_CHECK 0
 
 nonblocking_queue* nbqueue;
 list(bucket_node) lqueue;
@@ -60,6 +59,7 @@ unsigned int LOG;			// = 0;
 double PRUNE_TRESHOLD;		// = 0.35;
 double BUCKET_WIDTH;		// = 1.0;//0.000976563;
 unsigned int COLLABORATIVE_TODO_LIST;
+unsigned int SAFETY_CHECK;
 
 unsigned int *id;
 volatile long long *ops;
@@ -167,23 +167,24 @@ void* process(void *arg)
 
 				array[my_id] = timestamp;
 
-#if SAFETY_CHECK == 1
-				if(timestamp < GVT)
+				if ( SAFETY_CHECK )
 				{
-					printf("%u - %d:%d ERRORE timestamp:%f > GVT:%f\n",
-							my_id, (int)diff.tv_sec, (int)diff.tv_usec, timestamp, GVT);
-					exit(1);
+					if(timestamp < GVT)
+					{
+						printf("%u - %d:%d ERRORE timestamp:%f > GVT:%f\n",
+								my_id, (int)diff.tv_sec, (int)diff.tv_usec, timestamp, GVT);
+						exit(1);
+					}
+					unsigned int j =0;
+					for(;j<THREADS;j++)
+					{
+						double tmp;
+						do
+							tmp = array[j];
+						while( tmp < timestamp || ( D_EQUAL(timestamp, tmp) && j < my_id) );
+					}
+					GVT = timestamp;
 				}
-				unsigned int j =0;
-				for(;j<THREADS;j++)
-				{
-					double tmp;
-					do
-						tmp = array[j];
-					while( tmp < timestamp || ( D_EQUAL(timestamp, tmp) && j < my_id) );
-				}
-				GVT = timestamp;
-#endif
 
 
 				local_min = timestamp;
@@ -379,9 +380,9 @@ int main(int argc, char **argv)
 {
 	int par = 1;
 
-	if(argc != 14)
+	if(argc != 15)
 	{
-		printf("Missing parameters %d vs 14\n", argc);
+		printf("Missing parameters %d vs 15\n", argc);
 		exit(1);
 	}
 
@@ -401,6 +402,7 @@ int main(int argc, char **argv)
 	PRUNE_TRESHOLD = strtod(argv[par++], (char **)NULL);
 	BUCKET_WIDTH = strtod(argv[par++], (char **)NULL);
 	COLLABORATIVE_TODO_LIST = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
+	SAFETY_CHECK = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
 
 	id = (unsigned int*) malloc(THREADS*sizeof(unsigned int));
 	ops = (long long*) malloc(THREADS*sizeof(long long));
@@ -428,6 +430,7 @@ printf("LK_AHD:%f,", LOOK_AHEAD);
 printf("SIZE:%u,", INIT_SIZE);
 printf("B_WIDTH:%f,", BUCKET_WIDTH);
 printf("COLLABORATIVE_TODO_LIST:%u,", COLLABORATIVE_TODO_LIST);
+printf("SAFETY_CHECK:%u,", SAFETY_CHECK);
 
 
 	unsigned int i = 0;
