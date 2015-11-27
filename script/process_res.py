@@ -41,9 +41,18 @@ for (dirpath, dirnames, filenames) in walk("tmp"):
 		if f[0] not in ["N","C","L"]:
 			continue
 		f = open("tmp/"+f)
+		l = []
 		for line in f.readlines():
-			out_log.write(line)
+			l += [line]
+		if len(l) != 1:
+			o = err_log
+		else:
+			o = out_log
+		for line in l:
+			o.write(line.strip()+" ")
+		o.write("\n")
 out_log.close()
+err_log.close()
 
 
 f = open("res/aggregated")
@@ -62,6 +71,7 @@ for line in f.readlines():
 				k,v = elem.split(":")
 			except:
 				err_log.write(str( line ))
+				continue
 			if k == "T":
 				t = int(v)
 			elif k == "OPS":
@@ -92,6 +102,7 @@ for line in f.readlines():
 			elif k == "CHECK":
 				if v != "0":
 					err_log.write(str( line ))
+					continue
 			elif k == "S":
 				name += da
 				s = float(v)
