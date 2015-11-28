@@ -821,8 +821,8 @@ bucket_node* dequeue(nonblocking_queue *queue)
 		{
 			// 7. get next bucket
 			tmp_size = queue->dequeue_size;
-			index = hash(min->timestamp, queue->bucket_width) + 1;
-
+			//index = hash(min->timestamp, queue->bucket_width) + 1;
+			index++;
 			// 8. Find new right node, that should be a head.
 			if (index < tmp_size)
 				candidate = (bucket_node*)access_hashtable(queue->hashtable, index, queue->init_size, sizeof(bucket_node));
@@ -873,7 +873,8 @@ bucket_node* dequeue(nonblocking_queue *queue)
 			CAS_x86(
 					(volatile unsigned long long *)&(queue->current),
 					(unsigned long long)oldCurrent,
-					(((unsigned long long)hash(candidate->timestamp, queue->bucket_width)) << 32)
+					( ( (unsigned long long) index ) << 32) | generate_mark()
+					//(((unsigned long long)hash(candidate->timestamp, queue->bucket_width)) << 32)
 					)
 				;
 

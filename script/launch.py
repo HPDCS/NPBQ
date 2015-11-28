@@ -32,23 +32,23 @@ import sys
 import termios
 import atexit
 
-core = 8
-all_threads = [32]#[1,2,3,4,5,6,7,8,12,16,24,28,32]
-ops=50000
+core = 24
+all_threads = [1,2,4,6,8,10,12,14,16,18,20,22,24]
+ops=500000
 prob_roll=0.0
-prob_dequeue=0.49
-look_pool = [1.0,10.0]
-data_type = ["C", "N"]#["N", "L"]#, "C"]
-iterations = 1
+prob_dequeue=0.5
+look_pool = [10.0]
+data_type = ["C", "N"]#, "L"]#["N", "L"]#, "C"]
+iterations = 10
 
 verbose=0
 log=0
 
 init_size=32768
 prune_period=50000
-prune_tresh=0.9
+prune_tresh=0.8
 width=1.0
-collaborative = 0
+collaborative = 1
 safety = 0
 
 ops*=max(all_threads)
