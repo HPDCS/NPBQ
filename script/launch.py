@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # ***************************************************************************
 # 
 # This file is part of NBQueue, a lock-free O(1) priority queue.
@@ -32,21 +34,23 @@ import sys
 import termios
 import atexit
 
-core = 24
-all_threads = [1,2,4,6,8,10,12,14,16,18,20,22,24]
+core = 8
+all_threads = [1,2,4,6,8]#[1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32]
 ops=500000
 prob_roll=0.0
 prob_dequeue=0.5
-look_pool = [10.0]
-data_type = ["C", "N"]#, "L"]#["N", "L"]#, "C"]
-iterations = 10
+look_pool = [1.0, 10.0, 50.0]
+data_type = ["N", "C"]#, "L"]#["N", "L"]#, "C"]
+distribution = ["U", "E", "T"]
+iterations = 1
 
+enable_log = True
 verbose=0
 log=0
 
 init_size=32768
 prune_period=50000
-prune_tresh=0.8
+prune_tresh=0.9
 width=1.0
 collaborative = 1
 safety = 0
@@ -77,17 +81,30 @@ def get_next_set(threads, available):
 			res = max(res, i)
 	return res
 
-def print_log(first=False):
+def print_log2(first=False):
+	if not enable_log:
+		return
 	if not first:
 		for i in range(3+buf_line):
 			sys.stdout.write( "\033[1A\033[K")
 	print "Number of test: "+str(num_test-count_test)+"/"+str(num_test)+" Usage Core: "+str(core-core_avail)+"/"+str(core)+"\r"
 	print "-------------------------------------------------------------------------\r"
-	for j in look_pool:
-		for i in all_threads:
-			for k in data_type:
-				print " ".join([str(i),str(j),str(k),str(residual_iter[(i,j,k)]),str(instance[(i,j,k)])])+"\t",
-			print "\r"
+	for d in distribution:
+		for j in look_pool:
+			for i in all_threads:
+				for k in data_type:
+					print " ".join([k,str(i),str(j),d,str(residual_iter[(d,i,j,k)]),str(instance[(d,i,j,k)])])+" ",
+				print ""
+	print "-------------------------------------------------------------------------"
+
+def print_log(first=False):
+	if not enable_log:
+		return
+	if not first:
+		for i in range(3):
+			sys.stdout.write( "\033[1A\033[K")
+	print "-------------------------------------------------------------------------\r"
+	print "Number of test: "+str(num_test-count_test)+"/"+str(num_test)+" Usage Core: "+str(core-core_avail)+"/"+str(core)+"\r"
 	print "-------------------------------------------------------------------------"
 
 
@@ -106,7 +123,9 @@ if __name__ == "__main__":
 		print "WARNING more threads ("+str(m_core)+") than core available ("+str(core)+"). Using time-sharing!"
 		print "-------------------------------------------------------------------------\r"
 		core = m_core
-	buf_line = len(threads)*len(look_pool)
+	
+	buf_line = len(threads)*len(look_pool)*len(distribution)
+	print str(len(threads))+" "+str(len(look_pool))+" "+str(len(distribution))+" "+str(len(data_type))+" "+str(buf_line) 
 	residual_iter = {}
 	instance = {}
 	
@@ -136,29 +155,34 @@ if __name__ == "__main__":
 	
 	count_test = 0
 	
-	atexit.register(enable_echo, sys.stdin.fileno(), True)
-	enable_echo(sys.stdin.fileno(), False)
+	if enable_log:
+		atexit.register(enable_echo, sys.stdin.fileno(), True)
+		enable_echo(sys.stdin.fileno(), False)
 	
 	for run in range(iterations):
-		for look in look_pool:
-			look = str(look)
-			for struct in data_type:
-				for t in threads:
-					if not test_pool.has_key(t):
-						test_pool[t] = []
-					test_pool[t] += [[struct, ops, str(t),      prune_period, prob_roll, prob_dequeue, look,      init_size,  verbose,  log,  prune_tresh,   width, str(collaborative), str(safety), str(run)]]
-					count_test +=1
-					#	  		 STRUCT	 OPS, THREADS PRUNE_PERIOD  PROB_ROLL  PROB_DEQUEUE  LOOK_AHEAD INIT_SIZE   VERBOSE   LOG   PRUNE_TRESHOLD BUCKET_WIDTH
+		for d in distribution:
+			for look in look_pool:
+				look = str(look)
+				for struct in data_type:
+					for t in threads:
+						if not test_pool.has_key(t):
+							test_pool[t] = []
+						test_pool[t] += [[struct, ops, str(t),      prune_period, prob_roll, prob_dequeue, look,  d,    init_size,  verbose,  log,  prune_tresh,   width, str(collaborative), str(safety), str(run)]]
+						count_test +=1
+						#	  		 STRUCT	 OPS, THREADS PRUNE_PERIOD  PROB_ROLL  PROB_DEQUEUE  LOOK_AHEAD INIT_SIZE   VERBOSE   LOG   PRUNE_TRESHOLD BUCKET_WIDTH
 
 
 	num_test = count_test
-	for j in look_pool:
-		for i in all_threads:
-			for k in data_type:
-				residual_iter[(i,j,k)] = iterations
-				instance[(i,j,k)] = 0
+	for d in distribution:
+		for j in look_pool:
+			for i in all_threads:
+				for k in data_type:
+					residual_iter[(d,i,j,k)] = iterations
+					instance[(d,i,j,k)] = 0
 
 
+	
+	print "Number of test: "+str(num_test-count_test)+"/"+str(num_test)+" Usage Core: "+str(core-core_avail)+"/"+str(core)+"\r"
 
 	print_log(True)
 	while count_test > 0:
@@ -174,33 +198,33 @@ if __name__ == "__main__":
 				filename = tmp_dir+"/"+"-".join(cmdline)
 				f = open(filename, "w")
 				p = Popen(cmd+cmdline[:-1], stdout=f, stderr=f)
-				residual_iter[(t,float(cmdline[6]),cmdline[0])]-=1
-				instance[(t,float(cmdline[6]),cmdline[0])]+=1
+				residual_iter[(cmdline[7], t,float(cmdline[6]),cmdline[0])]-=1
+				instance[(cmdline[7], t,float(cmdline[6]),cmdline[0])]+=1
 				core_avail -= t
-				run_pool.add( (p,t,float(cmdline[6]),cmdline[0]) )
+				run_pool.add( (p,cmdline[7],t,float(cmdline[6]),cmdline[0]) )
 				file_pool[p]=f
 				count_test -= 1
 			continue
 		print_log()
 		sleep(1)
 		to_remove = set([])
-		for	p,t,i,j in run_pool:
+		for	p,d,t,i,j in run_pool:
 			if p.poll() != None:
-				to_remove.add((p,t,i,j))
+				to_remove.add((p,d,t,i,j))
 				file_pool[p].close()
 				del file_pool[p]
-				instance[(t,i,j)]-=1
+				instance[(d,t,i,j)]-=1
 				core_avail += t
 		run_pool -= to_remove
 		
 	while core_avail < core:
 		to_remove = set([])
-		for	p,t,i,j in run_pool:
+		for	p,d,t,i,j in run_pool:
 			if p.poll() != None:
-				to_remove.add((p,t,i,j))
+				to_remove.add((p,d,t,i,j))
 				file_pool[p].close()
 				del file_pool[p]
-				instance[(t,i,j)]-=1
+				instance[(d,t,i,j)]-=1
 				core_avail += t
 		run_pool -= to_remove
 		sleep(1)

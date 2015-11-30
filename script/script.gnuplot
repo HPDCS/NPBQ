@@ -59,9 +59,26 @@ filename.'-C.dat'\
 	using 1:4:5	w yerrorbars 	linecolor rgb "#990000" lt 1 lw 1.5 	 title "", '' \
 	using 1:4	w linespoints 	linecolor rgb "#990000" lt 2 lw 1.5 pt 6 title "CalQueue"
 
-
+#set yrange [:3000000]
+#
 #set ylabel '#OPS/Time'
 #set output filename.'_2.eps'
+#set key bottom left
+#plot \
+#filename.'-N.dat'\
+#	using 1:6:7	w yerrorbars 	linecolor rgb "#000099" lt 1 lw 1.5 	 title "", '' \
+#	using 1:6	w linespoints 	linecolor rgb "#000099" lt 2 lw 1.5 pt 6 title "NBQueue", \
+#filename.'-L.dat'\
+#	using 1:6:7	w yerrorbars 	linecolor rgb "#009900" lt 1 lw 1.5 	 title "", '' \
+#	using 1:6	w linespoints 	linecolor rgb "#009900" lt 2 lw 1.5 pt 6 title "LList", \
+#filename.'-C.dat'\
+#	using 1:6:7	w yerrorbars 	linecolor rgb "#990000" lt 1 lw 1.5 	 title "", '' \
+#	using 1:6	w linespoints 	linecolor rgb "#990000" lt 2 lw 1.5 pt 6 title "CalQueue"
+#	
+#set yrange [:500000]
+#	
+#set ylabel '#OPS/CPU Time'
+#set output filename.'_3.eps'
 #set key bottom left
 #plot \
 #filename.'-N.dat'\

@@ -42,6 +42,6 @@ rm $res_dir/*
 
 time -f "time %E" python launch.py
 echo process data
-time -f "time %E" python process_res.py
-echo generate graphs
-time -f "time %E" sh graphs.sh
+#time -f "time %E" python process_res.py
+#echo generate graphs
+#time -f "time %E" sh graphs.sh

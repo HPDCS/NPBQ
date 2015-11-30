@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # ***************************************************************************
 # 
 # This file is part of NBQueue, a lock-free O(1) priority queue.
@@ -52,8 +54,6 @@ for (dirpath, dirnames, filenames) in walk("tmp"):
 			o.write(line.strip()+" ")
 		o.write("\n")
 out_log.close()
-err_log.close()
-
 
 f = open("res/aggregated")
 d = {}
@@ -70,7 +70,7 @@ for line in f.readlines():
 			try:
 				k,v = elem.split(":")
 			except:
-				err_log.write(str( line ))
+				err_log.write(str( line )+"\n")
 				continue
 			if k == "T":
 				t = int(v)
@@ -83,7 +83,9 @@ for line in f.readlines():
 				name += str(v) + "-"
 			elif k == "P_DEQUEUE":
 				name += str(v) + "-"
-			elif k == "LK_AHD":   
+			elif k == "MEAN_INTERARRIVAL_TIME":   
+				name += str(v) + "-"
+			elif k == "PROB_DIST":   
 				name += str(v) + "-"
 			elif k == "SIZE":     
 				name += str(v) + "-"
@@ -101,7 +103,7 @@ for line in f.readlines():
 				da = v
 			elif k == "CHECK":
 				if v != "0":
-					err_log.write(str( line ))
+					err_log.write(str( line )+"\n")
 					continue
 			elif k == "S":
 				name += da
@@ -112,7 +114,7 @@ for line in f.readlines():
 					d[name][t] = []
 				d[name][t] += [(r,u,s,o)]
 	except:
-		err_log.write(str( line ))
+		err_log.write(str( line )+"\n")
 		
 err_log.close()
 f.close()
@@ -167,3 +169,6 @@ for k,v in d.items():
 		
 		
 	f.close()
+
+err_log.close()
+

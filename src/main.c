@@ -51,7 +51,8 @@ unsigned int OPERATIONS; 	// Number of operations per thread
 unsigned int PRUNE_PERIOD;	// Number of ops before calling prune
 double PROB_ROLL;			// Control parameter for increasing the probability to enqueue // a node with timestamp lower than the current owned by the thread
 double PROB_DEQUEUE;		// Probability to dequeue
-double LOOK_AHEAD;			// Maximum distance from the current event owned by the thread
+double MEAN_INTERARRIVAL_TIME;			// Maximum distance from the current event owned by the thread
+char   PROB_DISTRIBUTION;
 unsigned int LOG_PERIOD;	// Number of ops before printing a log
 unsigned int INIT_SIZE;		// Define the starting size of the queue
 unsigned int VERBOSE;		// if 1 prints a full log on STDOUT and on individual files
@@ -81,6 +82,32 @@ void test_log(unsigned int my_id, const char *msg, ...) {
 
 	printf("%s",buffer);
 	fwrite(buffer,1,  strlen(buffer), log_files[my_id]);
+}
+
+double uniform_rand(struct drand48_data *seed)
+{
+	double random_num = 0.0;
+	drand48_r(seed, &random_num);
+	random_num *= MEAN_INTERARRIVAL_TIME*2;
+	return random_num;
+}
+
+double triangular_rand(struct drand48_data *seed)
+{
+	double random_num = 0.0;
+	drand48_r(seed, &random_num);
+	random_num = sqrt(random_num);
+	random_num *= MEAN_INTERARRIVAL_TIME*3/2;
+	return random_num;
+}
+
+double exponential_rand(struct drand48_data *seed)
+{
+	double random_num = 0.0;
+	drand48_r(seed, &random_num);
+	random_num =  -log(random_num);
+	random_num *= MEAN_INTERARRIVAL_TIME;
+	return random_num;
 }
 
 void* process(void *arg)
@@ -201,13 +228,18 @@ void* process(void *arg)
 		}
 		else
 		{
-			double update;
 			double timestamp = 0.0;
 			int counter = 0;
-			drand48_r(&seed, &random_num);
-			update = random_num;
+			double update = 0.0;
+
+			if(PROB_DISTRIBUTION == 'U')
+				update = uniform_rand(&seed);
+			else if(PROB_DISTRIBUTION == 'T')
+				update = triangular_rand(&seed);
+			else if(PROB_DISTRIBUTION == 'E')
+				update = exponential_rand(&seed);
+
 			timestamp = local_min;
-			update *= LOOK_AHEAD;
 
 			timestamp += update;
 			if(timestamp < 0.0)
@@ -380,9 +412,9 @@ int main(int argc, char **argv)
 {
 	int par = 1;
 
-	if(argc != 15)
+	if(argc != 16)
 	{
-		printf("Missing parameters %d vs 15\n", argc);
+		printf("Missing parameters %d vs 16\n", argc);
 		exit(1);
 	}
 
@@ -394,7 +426,8 @@ int main(int argc, char **argv)
 	PRUNE_PERIOD = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
 	PROB_ROLL = strtod(argv[par++], (char **)NULL);
 	PROB_DEQUEUE = strtod(argv[par++], (char **)NULL);
-	LOOK_AHEAD = strtod(argv[par++], (char **)NULL);
+	MEAN_INTERARRIVAL_TIME = strtod(argv[par++], (char **)NULL);
+	PROB_DISTRIBUTION = argv[par++][0];
 	LOG_PERIOD = (OPERATIONS/10);
 	INIT_SIZE = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
 	VERBOSE = (unsigned int) strtol(argv[par++], (char **)NULL, 10);
@@ -425,7 +458,8 @@ printf("PRUNE_PER:%u,", PRUNE_PERIOD);
 printf("PRUNE_T:%f,", PRUNE_TRESHOLD);
 //printf("PROB_ROLL:%f\n", PROB_ROLL);
 printf("P_DEQUEUE:%f,", PROB_DEQUEUE);
-printf("LK_AHD:%f,", LOOK_AHEAD);
+printf("MEAN_INTERARRIVAL_TIME:%f,", MEAN_INTERARRIVAL_TIME);
+printf("PROB_DIST:%c,",PROB_DISTRIBUTION);
 //printf("LOG_PERIOD:%u\n", LOG_PERIOD);
 printf("SIZE:%u,", INIT_SIZE);
 printf("B_WIDTH:%f,", BUCKET_WIDTH);
