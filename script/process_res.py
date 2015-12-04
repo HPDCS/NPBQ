@@ -66,6 +66,7 @@ for line in f.readlines():
 		s = 0
 		t = 0
 		o = 0
+		e = 0
 		for elem in line:
 			try:
 				k,v = elem.split(":")
@@ -101,8 +102,11 @@ for line in f.readlines():
 				u = float(v)
 			elif k == "D":
 				da = v
+			elif k == "EMPTY_QUEUE":
+				e = int(v)
+				name += str(v) + "-"
 			elif k == "CHECK":
-				if v != "0":
+				if v != "0" and e == 0:
 					err_log.write(str( line )+"\n")
 					continue
 			elif k == "S":
@@ -135,6 +139,8 @@ for k,v in d.items():
 		opsr_dev = 0
 		opsus_dev = 0
 		for l in v[k1]:
+			if l[0] > (l[1]+l[2])/k1:
+				print "STRANO- R:"+str( l[0] )+"\tU:"+str(l[1]+l[2])
 			#f.write(str(k1)+", "+str(l[0])+", "+str(l[1]+l[2])+", "+str(l[3]/l[0])+", "+str(l[3]/(l[1]+l[2]))+"\n")
 			r_avg 		+= l[0]
 			us_avg 		+= l[1]+l[2]

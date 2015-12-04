@@ -34,28 +34,54 @@ import sys
 import termios
 import atexit
 
-core = 8
-all_threads = [1,2,4,6,8]#[1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32]
-ops=500000
-prob_roll=0.0
-prob_dequeue=0.5
-look_pool = [1.0, 10.0, 50.0]
-data_type = ["N", "C"]#, "L"]#["N", "L"]#, "C"]
-distribution = ["U", "E", "T"]
-iterations = 1
+print sys.argv
 
-enable_log = True
-verbose=0
-log=0
 
-init_size=32768
-prune_period=50000
-prune_tresh=0.9
-width=1.0
-collaborative = 1
-safety = 0
+conf = open(sys.argv[1])
 
-ops*=max(all_threads)
+for line in conf.readlines():
+	line = line.strip().split("#")[0].split("=")
+	if line[0] == "core":
+		core=int(line[1])
+	elif line[0] == "all_threads":
+		all_threads = [int(x) for x in line[1].split(",")]
+	elif line[0] == "ops":
+		ops = int(line[1])
+	elif line[0] == "iterations":
+		iterations = int(line[1])
+	elif line[0] == "verbose":
+		verbose = int(line[1])
+	elif line[0] == "log":
+		log = int(line[1])
+	elif line[0] == "prune_period":
+		prune_period = int(line[1])
+	elif line[0] == "init_size":
+		init_size = int(line[1])
+	elif line[0] == "collaborative":
+		collaborative = int(line[1])
+	elif line[0] == "safety":
+		safety = int(line[1])
+	elif line[0] == "empty_queue":
+		empty_queue = int(line[1])
+	elif line[0] == "prob_roll":
+		prob_roll = float(line[1])
+	elif line[0] == "prune_tresh":
+		prune_tresh = float(line[1])
+	elif line[0] == "width":
+		width = float(line[1])
+	elif line[0] == "prob_dequeue":
+		prob_dequeue = float(line[1])
+	elif line[0] == "look_pool":
+		look_pool = [float(x) for x in line[1].split(",")]
+	elif line[0] == "data_type":
+		data_type = line[1].split(",")
+	elif line[0] == "distribution":
+		distribution = line[1].split(",")
+	elif line[0] == "enable_log":
+		enable_log = line[1] == "1"
+		
+
+
 
 cmd1="time"
 cmd2="-f"
@@ -122,7 +148,7 @@ if __name__ == "__main__":
 		print "-------------------------------------------------------------------------\r"
 		print "WARNING more threads ("+str(m_core)+") than core available ("+str(core)+"). Using time-sharing!"
 		print "-------------------------------------------------------------------------\r"
-		core = m_core
+
 	
 	buf_line = len(threads)*len(look_pool)*len(distribution)
 	print str(len(threads))+" "+str(len(look_pool))+" "+str(len(distribution))+" "+str(len(data_type))+" "+str(buf_line) 
@@ -167,7 +193,7 @@ if __name__ == "__main__":
 					for t in threads:
 						if not test_pool.has_key(t):
 							test_pool[t] = []
-						test_pool[t] += [[struct, ops, str(t),      prune_period, prob_roll, prob_dequeue, look,  d,    init_size,  verbose,  log,  prune_tresh,   width, str(collaborative), str(safety), str(run)]]
+						test_pool[t] += [[struct, ops, str(t),      prune_period, prob_roll, prob_dequeue, look,  d,    init_size,  verbose,  log,  prune_tresh,   width, str(collaborative), str(safety), str(empty_queue), str(run)]]
 						count_test +=1
 						#	  		 STRUCT	 OPS, THREADS PRUNE_PERIOD  PROB_ROLL  PROB_DEQUEUE  LOOK_AHEAD INIT_SIZE   VERBOSE   LOG   PRUNE_TRESHOLD BUCKET_WIDTH
 
@@ -200,7 +226,7 @@ if __name__ == "__main__":
 				p = Popen(cmd+cmdline[:-1], stdout=f, stderr=f)
 				residual_iter[(cmdline[7], t,float(cmdline[6]),cmdline[0])]-=1
 				instance[(cmdline[7], t,float(cmdline[6]),cmdline[0])]+=1
-				core_avail -= t
+				core_avail -= min(t,core)
 				run_pool.add( (p,cmdline[7],t,float(cmdline[6]),cmdline[0]) )
 				file_pool[p]=f
 				count_test -= 1
@@ -214,7 +240,7 @@ if __name__ == "__main__":
 				file_pool[p].close()
 				del file_pool[p]
 				instance[(d,t,i,j)]-=1
-				core_avail += t
+				core_avail += min(t,core)
 		run_pool -= to_remove
 		
 	while core_avail < core:
@@ -229,26 +255,3 @@ if __name__ == "__main__":
 		run_pool -= to_remove
 		sleep(1)
 		print_log()
-
-	'''
-	for k in reversed(sorted(test_pool.keys())):
-		for cmdline in test_pool[k]:
-			while True:
-				to_remove = set([])
-				for	p,t in run_pool:
-					if p.poll() != None:
-						to_remove.add((p,t))
-						file_pool[p].close()
-						del file_pool[p]
-						core_avail += t
-				run_pool -= to_remove
-				if core_avail - k >= 0:
-					filename = tmp_dir+"/"+"-".join(cmdline)
-					f = open(filename, "w")
-					p = Popen(cmd+cmdline[:-1], stdout=f, stderr=f)
-					core_avail -= k
-					run_pool.add( (p,k) )
-					file_pool[p]=f
-					break		
-				sleep(1)
-	'''
