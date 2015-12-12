@@ -17,4 +17,6 @@ src/arch \
 src/datatypes \
 src \
 src/mm \
+src/random \
+src/util \
 

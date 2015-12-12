@@ -34,6 +34,7 @@
 #include "datatypes/list.h"
 #include "datatypes/calqueue.h"
 
+#include "random/my_rand.h"
 #include "mm/myallocator.h"
 
 
@@ -85,31 +86,6 @@ void test_log(unsigned int my_id, const char *msg, ...) {
 	fwrite(buffer,1,  strlen(buffer), log_files[my_id]);
 }
 
-double uniform_rand(struct drand48_data *seed)
-{
-	double random_num = 0.0;
-	drand48_r(seed, &random_num);
-	random_num *= MEAN_INTERARRIVAL_TIME*2;
-	return random_num;
-}
-
-double triangular_rand(struct drand48_data *seed)
-{
-	double random_num = 0.0;
-	drand48_r(seed, &random_num);
-	random_num = sqrt(random_num);
-	random_num *= MEAN_INTERARRIVAL_TIME*3/2;
-	return random_num;
-}
-
-double exponential_rand(struct drand48_data *seed)
-{
-	double random_num = 0.0;
-	drand48_r(seed, &random_num);
-	random_num =  -log(random_num);
-	random_num *= MEAN_INTERARRIVAL_TIME;
-	return random_num;
-}
 
 void* process(void *arg)
 {
@@ -234,11 +210,11 @@ void* process(void *arg)
 			double update = 0.0;
 
 			if(PROB_DISTRIBUTION == 'U')
-				update = uniform_rand(&seed);
+				update = uniform_rand(&seed, MEAN_INTERARRIVAL_TIME);
 			else if(PROB_DISTRIBUTION == 'T')
-				update = triangular_rand(&seed);
+				update = triangular_rand(&seed, MEAN_INTERARRIVAL_TIME);
 			else if(PROB_DISTRIBUTION == 'E')
-				update = exponential_rand(&seed);
+				update = exponential_rand(&seed, MEAN_INTERARRIVAL_TIME);
 
 			timestamp = local_min;
 
