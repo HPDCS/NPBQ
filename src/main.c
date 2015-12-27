@@ -35,6 +35,7 @@
 #include "datatypes/calqueue.h"
 
 #include "random/my_rand.h"
+#include "util/backoff.h"
 #include "mm/myallocator.h"
 
 
@@ -104,7 +105,7 @@ void* process(void *arg)
 
 
 	my_id =  *((unsigned int*)(arg));
-	lid = my_id;
+	queue_init_per_thread(my_id);
 	sprintf(name_file, "%u.txt", my_id);
 	srand48_r(my_id, &seed);
 
@@ -273,7 +274,7 @@ void* process(void *arg)
 
 			gettimeofday(&endTV, NULL);
 			timersub(&endTV, &startTV, &diff);
-			printf("%u - LOG %.10f %.2f/100.00 SEC:%d:%d\n", lid, min, ((double)ops_count[my_id])*100/OPERATIONS, (int)diff.tv_sec, (int)diff.tv_usec);
+			printf("%u - LOG %.10f %.2f/100.00 SEC:%d:%d\n", my_id, min, ((double)ops_count[my_id])*100/OPERATIONS, (int)diff.tv_sec, (int)diff.tv_usec);
 		}
 
 		ops_count[my_id]++;
@@ -296,7 +297,7 @@ void* process(void *arg)
 
 		gettimeofday(&endTV, NULL);
 		timersub(&endTV, &startTV, &diff);
-		printf("%u - LOG %.10f %.2f/100.00 SEC:%d:%d\n", lid, min, ((double)ops_count[my_id])*100/OPERATIONS, (int)diff.tv_sec, (int)diff.tv_usec);
+		printf("%u - LOG %.10f %.2f/100.00 SEC:%d:%d\n", my_id, min, ((double)ops_count[my_id])*100/OPERATIONS, (int)diff.tv_sec, (int)diff.tv_usec);
 	}
 
 	do

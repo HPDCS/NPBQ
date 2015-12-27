@@ -9,7 +9,7 @@ NBPQueue
 *.dat
 *.eps
 *.pdf
-/script/tmp/
+/script/tmp/*
 /script/graphs/
 /latex/
 /Release/

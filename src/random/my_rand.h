@@ -8,6 +8,7 @@
 #ifndef RANDOM_MY_RAND_H_
 #define RANDOM_MY_RAND_H_
 
+#include <stdlib.h>
 
 extern double uniform_rand(struct drand48_data *seed, double mean);
 extern double triangular_rand(struct drand48_data *seed, double mean);

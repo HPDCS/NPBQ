@@ -35,13 +35,25 @@
 #include <pthread.h>
 #include <math.h>
 
+#include "../util/backoff.h"
 #include "../arch/atomic.h"
 #include "../mm/myallocator.h"
 #include "../datatypes/nonblocking_queue.h"
 
-__thread bucket_node *to_free_pointers = NULL;
-__thread unsigned int  lid;
-__thread unsigned int  mark;
+static __thread unsigned int  lid;
+
+
+static __thread bucket_node *to_free_pointers = NULL;
+static __thread unsigned int mark;
+
+static unsigned int MAX_BACKOFF = 10;
+static time_t SLOT = 60;//256;
+static __thread unsigned int flush_attempts=0;
+static __thread unsigned int insert_attempts=0;
+static __thread unsigned int emptylist_attempts=0;
+static __thread unsigned int mark_attempt=0;
+static __thread unsigned int local_starting_slot=0;
+static __thread struct drand48_data backoff_seed;
 
 #define USE_MACRO 1
 
@@ -431,16 +443,22 @@ static inline void flush_current(nonblocking_queue* queue, unsigned int index)
 {
 	unsigned long long oldCur;
 	unsigned int oldIndex;
+	unsigned int count = 0;
 	unsigned long long newCur =  ( ( unsigned long long ) index ) << 32;
 	newCur |= generate_mark();
 
+
 	// Retry until the left node has a timestamp strictly less than current and
 	// the CAS fails
+	//flush_attempts = 0;
+	count = flush_attempts;
 	do
 	{
-
 		oldCur = queue->current;
 		oldIndex = (unsigned int) (oldCur >> 32);
+		exponential_backoff(SLOT, count, &backoff_seed);
+		count = increase_attempt(count, MAX_BACKOFF);
+
 	}
 	while (
 			index <= oldIndex
@@ -450,6 +468,8 @@ static inline void flush_current(nonblocking_queue* queue, unsigned int index)
 						(unsigned long long) newCur
 						)
 					);
+	count = decrease_attempt(count);
+	flush_attempts = count - (count == flush_attempts);
 }
 
 /**
@@ -468,13 +488,18 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 	bucket_node *left_node, *right_node, *tmp_node, *tmp, *bucket;
 	unsigned int index;
 	unsigned int tmp_size;
+	unsigned int count = insert_attempts;
 	bool cas_result = false;
 
 	// Phase 1. Check if the hashtable cover the timestamp value. If not add the event in future list
+
+
+	//insert_attempts=0;
 	do
 	{
 		// if the next of the future list head is null it means
 		// that an expansion of the hashtable is occurring
+
 		do
 		{
 			tmp_node = queue->future_list;
@@ -483,8 +508,9 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 			new_node->next = tmp;
 		}
 		while(is_marked(tmp));
-
 		index = hash(new_node->timestamp, queue->bucket_width);
+		exponential_backoff(SLOT, count, &backoff_seed);
+		count = increase_attempt(count, MAX_BACKOFF);
 	} while (index >= tmp_size
 			&& !(cas_result = CAS_x86(
 								(volatile unsigned long long *)&(tmp_node->next),
@@ -494,10 +520,13 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 				)
 			);
 
+	count = decrease_attempt(count);
 	// node connected in future list
 	if (cas_result)
+	{
+		insert_attempts = count - (count == insert_attempts);
 		return false;
-
+	}
 	// node to be added in the hashtable
 	bucket = (bucket_node*)access_hashtable(queue->hashtable, index, queue->init_size, sizeof(bucket_node));
 
@@ -530,6 +559,7 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 static void empty_todo_list(nonblocking_queue* queue)
 {
 	bucket_node *tmp, *tmp_next, *tail, *head;
+	unsigned int count = emptylist_attempts;
 	tail = queue->tail;
 	head = queue->todo_list;
 
@@ -538,13 +568,16 @@ static void empty_todo_list(nonblocking_queue* queue)
 	{
 		tmp = get_unmarked(head->next);
 		tmp_next = tmp->next;
+		exponential_backoff(SLOT, emptylist_attempts, &backoff_seed);
+		count = increase_attempt(emptylist_attempts, MAX_BACKOFF);
 	} while (tmp != tail && !CAS_x86(
 				(volatile unsigned long long *)&(head->next),
 				(unsigned long long) get_marked(tmp),
 				(unsigned long long) get_marked(tmp_next)
 				)
 			);
-
+	count = decrease_attempt(emptylist_attempts);
+	emptylist_attempts = count - count == emptylist_attempts;
 	//insert in the hashtable or in the future list again
 	if(tmp != tail)
 		insert(queue, tmp);
@@ -562,10 +595,9 @@ static void empty_todo_list(nonblocking_queue* queue)
  */
 static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_size)
 {
-	unsigned int i;
+	unsigned int i, count;
 	bucket_node *tail, *new_future, *future;
 	bucket_node *tmp, *tmp_next;
-
 
 	if(queue->dequeue_size != old_size)
 		return queue->dequeue_size > old_size;
@@ -631,10 +663,15 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 
 	}
 
+	count = mark_attempt;
+
 	do
 	{
+		count++;
 		tmp = queue->todo_list;
 		tmp_next = tmp->next;
+		exponential_backoff(SLOT, mark_attempt, &backoff_seed);
+		count = increase_attempt(mark_attempt, MAX_BACKOFF);
 	}
 	while(!is_marked(tmp_next)
 			&& !CAS_x86(
@@ -643,6 +680,8 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 					(unsigned long long)  get_marked(tmp_next)
 			)
 	);
+	count = decrease_attempt(count);
+	mark_attempt = count - (count == mark_attempt);
 
 	// empty the to do list
 	tmp = queue->todo_list->next;
@@ -896,7 +935,7 @@ bucket_node* dequeue(nonblocking_queue *queue)
 double prune(nonblocking_queue *queue, double timestamp)
 {
 	unsigned int end_index = hash(timestamp, queue->bucket_width);
-	unsigned int start_index = 0;//queue->starting_slot;
+	unsigned int start_index = local_starting_slot;//queue->starting_slot;
 	unsigned int i;
 	double committed = 0;
 	bucket_node *tmp, *to_remove_node;
@@ -917,6 +956,7 @@ double prune(nonblocking_queue *queue, double timestamp)
 					(unsigned long long)tail)
 					)
 		{
+			local_starting_slot += (i==local_starting_slot+1);
 			while(to_remove_node != tail)
 			{
 				tmp = to_remove_node->next;
@@ -931,6 +971,8 @@ double prune(nonblocking_queue *queue, double timestamp)
 				to_remove_node = tmp;
 			}
 		}
+		else
+			local_starting_slot += (i==local_starting_slot+1);
 	}
 
 	while(*tmp_previous != NULL)
@@ -960,6 +1002,14 @@ double prune(nonblocking_queue *queue, double timestamp)
 	}
 
 	return committed;
+}
+
+
+void queue_init_per_thread(unsigned int my_id)
+{
+	lid = my_id;
+	srand48_r(lid+17, &backoff_seed);
+
 }
 
 #pragma GCC diagnostic pop

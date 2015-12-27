@@ -6,6 +6,8 @@
  */
 
 
+#include <stdlib.h>
+#include <math.h>
 
 double uniform_rand(struct drand48_data *seed, double mean)
 {

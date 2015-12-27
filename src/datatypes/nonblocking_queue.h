@@ -33,10 +33,6 @@
 #define INFTY DBL_MAX
 #define D_EQUAL(a,b) (fabs((a) - (b)) < DBL_EPSILON)
 
-extern __thread unsigned int  lid;
-
-
-
 /**
  *  Struct that define a node in a bucket
  *  */
@@ -90,5 +86,6 @@ extern bool enqueue(nonblocking_queue *queue, double timestamp, void* payload);
 extern bucket_node* dequeue(nonblocking_queue *queue);
 extern double prune(nonblocking_queue *queue, double timestamp);
 extern nonblocking_queue* queue_init(unsigned int size, double bucket_width, unsigned int collaborative_todo_list);
+extern void queue_init_per_thread(unsigned int lid);
 
 #endif /* DATATYPES_NONBLOCKING_QUEUE_H_ */
