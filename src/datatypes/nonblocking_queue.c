@@ -328,6 +328,7 @@ static inline bucket_node* node_malloc(void *payload, double timestamp)
 	res->counter = 1;\
 	res->next = NULL;\
 	res->generator = res;\
+	res->to_remove = 0;\
 	res->payload = (n_payload);\
 	res->timestamp = (n_timestamp);\
 	res;\
@@ -428,7 +429,7 @@ static void search(nonblocking_queue* queue, bucket_node *head, double timestamp
  * @param left_node the candidate node for being next current
  *
  */
-static inline void flush_current(nonblocking_queue* queue, unsigned int index)
+static inline void flush_current(nonblocking_queue* queue, unsigned int index, bucket_node* node)
 {
 	unsigned long long oldCur;
 	unsigned int oldIndex;
@@ -444,7 +445,7 @@ static inline void flush_current(nonblocking_queue* queue, unsigned int index)
 		oldIndex = (unsigned int) (oldCur >> 32);
 	}
 	while (
-			index <= oldIndex
+			index <= oldIndex && !is_marked(node->next)
 			&& !CAS_x86(
 						(volatile unsigned long long *)&(queue->current),
 						(unsigned long long) oldCur,
@@ -476,14 +477,16 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 	{
 		// if the next of the future list head is null it means
 		// that an expansion of the hashtable is occurring
-		do
+		//do
 		{
 			tmp_node = queue->future_list;
 			tmp_size = tmp_node->counter;
 			tmp = tmp_node->next;
 			new_node->next = tmp;
 		}
-		while(is_marked(tmp));
+		//while(is_marked(tmp));
+		if(is_marked(tmp))
+			break;
 
 		index = hash(new_node->timestamp, queue->bucket_width);
 	} while (index >= tmp_size
@@ -616,7 +619,7 @@ static bool try_search(nonblocking_queue* queue, bucket_node *head, double times
  */
 static void try_empty_todo_list(nonblocking_queue* queue)
 {
-	bucket_node *tmp, *tmp_next, *tail, *head, *tmp_node, *bucket, *left_node, *right_node;
+	bucket_node *tmp, *tmp_next, *tail, *head, *tmp_node, *bucket, *left_node, *right_node, *tmp_ftr;
 	unsigned int tmp_size;
 	unsigned int index;
 	bool cas_result = false;
@@ -632,30 +635,35 @@ static void try_empty_todo_list(nonblocking_queue* queue)
 		tmp = get_unmarked(head->next);
 		tmp_next = tmp->next;
 		if(tmp->to_remove == 1)
+		{
+			mm_free(new_node);
 			goto end;
-		new_node->timestamp = tmp->timestamp;
-		new_node->payload = tmp->payload;
-		new_node->generator = tmp->generator;
+		}
 		if(tmp == tail)
 		{
 			mm_free(new_node);
 			return;
 		}// if the next of the future list head is null it means
 		// that an expansion of the hashtable is occurring
-		do
+
+		new_node->timestamp = tmp->timestamp;
+		new_node->payload = tmp->payload;
+		new_node->generator = tmp->generator;
+		//do
 		{
 			tmp_node = queue->future_list;
 			tmp_size = tmp_node->counter;
-			tmp = tmp_node->next;
-			new_node->next = tmp;
+			tmp_ftr = tmp_node->next;
+			new_node->next = tmp_ftr;
 		}
-		while(is_marked(tmp));
-
+		//while(is_marked(tmp_ftr));
+		if(is_marked(tmp_ftr))
+			break;
 		index = hash(new_node->timestamp, queue->bucket_width);
 	} while (index >= tmp_size
 			&& !(cas_result = CAS_x86(
 								(volatile unsigned long long *)&(tmp_node->next),
-								(unsigned long long) tmp,
+								(unsigned long long) tmp_ftr,
 								(unsigned long long) new_node
 								)
 				)
@@ -697,6 +705,7 @@ static void try_empty_todo_list(nonblocking_queue* queue)
 		)
 	{
 		connect_to_be_freed_list(queue, tmp, 1);
+		tmp->to_remove = 1;
 	}
 	else
 	{
@@ -840,7 +849,7 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 
 	while (get_unmarked(tmp) != tail)
 	{
-		empty_todo_list(queue);
+		try_empty_todo_list(queue);
 		tmp = queue->todo_list->next;
 	}
 
@@ -919,7 +928,7 @@ bool enqueue(nonblocking_queue* queue, double timestamp, void* payload)
 	bool res = insert(queue, new_node);
 	// Try to flush the new current if necessary
 	if(res)
-		flush_current(queue, hash(new_node->timestamp, queue->bucket_width));
+		flush_current(queue, hash(new_node->timestamp, queue->bucket_width), new_node);
 
 	// Collaborate in emptying the todo_list
 
@@ -1140,8 +1149,8 @@ double prune(nonblocking_queue *queue, double timestamp)
 			{
 				tmp = to_remove_node;
 				to_remove_node = tmp->next;
-				if(!is_marked(to_remove_node))
-					error("Found a valid node during prune B.\n");
+				if(!is_marked(to_remove_node) && tmp->to_remove == 0)
+					error("Found a valid node during prune B %p %p %p %u %f.\n", tmp, tmp->next, tmp->generator, tmp->to_remove, tmp->timestamp);
 				to_remove_node = get_unmarked(to_remove_node);
 				mm_free(tmp);
 			}
