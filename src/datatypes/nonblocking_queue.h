@@ -46,7 +46,9 @@ struct _bucket_node
 	//char pad1[64];
 	bucket_node * volatile next;	// pointer to the successor
 	char pad2[56];
-	//void *queue;	// pointer to the successor
+	volatile unsigned int to_remove; 			// used to resolve the conflict with same timestamp using a FIFO policy
+	char pad[60];
+	void *generator;	// pointer to the successor
 	void *payload;  				// general payload
 	double timestamp;  				// key
 	unsigned int counter; 			// used to resolve the conflict with same timestamp using a FIFO policy

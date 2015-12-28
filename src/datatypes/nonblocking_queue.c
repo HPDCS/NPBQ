@@ -327,6 +327,7 @@ static inline bucket_node* node_malloc(void *payload, double timestamp)
 		error("%lu - Not aligned Node \n", pthread_self());*/\
 	res->counter = 1;\
 	res->next = NULL;\
+	res->generator = res;\
 	res->payload = (n_payload);\
 	res->timestamp = (n_timestamp);\
 	res;\
@@ -515,6 +516,196 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 			);
 	return true;
 }
+
+/**
+ * This function implements the search of a node that contains a given timestamp t. It finds two adjacent nodes,
+ * left and right, such that: left.timestamp <= t and right.timestamp > t.
+ *
+ * Based on the code by Timothy L. Harris. For further information see:
+ * Timothy L. Harris, "A Pragmatic Implementation of Non-Blocking Linked-Lists"
+ * Proceedings of the 15th International Symposium on Distributed Computing, 2001
+ *
+ * @author Romolo Marotta
+ *
+ * @param queue the queue that contains the bucket
+ * @param head the head of the list in which we have to perform the search
+ * @param timestamp the value to be found
+ * @param left_node a pointer to a pointer used to return the left node
+ * @param right_node a pointer to a pointer used to return the right node
+ *
+ */
+static bool try_search(nonblocking_queue* queue, bucket_node *head, double timestamp, void* payload,
+		bucket_node **left_node, bucket_node **right_node)
+{
+	bucket_node *left, *right, *left_next, *tmp, *tmp_next, *tail;
+	unsigned int counter;
+	tail = queue->tail;
+
+	do
+	{
+		// Fetch the head and its next
+		tmp = head;
+		tmp_next = tmp->next;
+		counter = 0;
+		do
+		{
+			bool marked = is_marked(tmp_next);
+			// Find the first unmarked node that is <= timestamp
+			if (!marked)
+			{
+				left = tmp;
+				left_next = tmp_next;
+				counter = 0;
+			}
+			// Take a snap to identify the last marked node before the right node
+			counter+=marked;
+
+			// Find the next unmarked node from the left node (right node)
+			tmp = get_unmarked(tmp_next);
+			//if (tmp == tail)
+			//	break;
+			tmp_next = tmp->next;
+			if(tmp->generator ==  payload)
+				return false;
+
+		} while (	tmp != tail &&
+					(
+						is_marked(tmp_next)
+						|| tmp->timestamp < timestamp
+						|| D_EQUAL(tmp->timestamp, timestamp)
+					)
+				);
+
+		// Set right node
+		right = tmp;
+
+		//left node and right node have to be adjacent. If not try with CAS
+		if (left_next != right)
+		{
+			// if CAS succeeds connect the removed nodes to to_be_freed_list
+			if (!CAS_x86(
+						(volatile unsigned long long *)&(left->next),
+						(unsigned long long) left_next,
+						(unsigned long long) right
+						)
+					)
+				continue;
+			connect_to_be_freed_list(queue, left_next, counter);
+		}
+		// at this point they are adjacent. Thus check that right node is still unmarked and return
+		if (right == tail || !is_marked(right->next))
+		{
+			*left_node = left;
+			*right_node = right;
+			return true;
+		}
+	} while (1);
+}
+
+
+/**
+ * This function tries to remove one element from the top of the todo_list
+ * end try to insert it in the hashtable
+ *
+ * @author Romolo Marotta
+ *
+ * @param queue the queue of which the todo_list is taken
+ *
+ * @return true if the thread removes the last event in the todo_list
+ *
+ */
+static void try_empty_todo_list(nonblocking_queue* queue)
+{
+	bucket_node *tmp, *tmp_next, *tail, *head, *tmp_node, *bucket, *left_node, *right_node;
+	unsigned int tmp_size;
+	unsigned int index;
+	bool cas_result = false;
+	tail = queue->tail;
+	head = queue->todo_list;
+
+
+	bucket_node *new_node = node_malloc(NULL, 0.0);
+
+	// Phase 1. Check if the hashtable cover the timestamp value. If not add the event in future list
+	do
+	{
+		tmp = get_unmarked(head->next);
+		tmp_next = tmp->next;
+		if(tmp->to_remove == 1)
+			goto end;
+		new_node->timestamp = tmp->timestamp;
+		new_node->payload = tmp->payload;
+		new_node->generator = tmp->generator;
+		if(tmp == tail)
+		{
+			mm_free(new_node);
+			return;
+		}// if the next of the future list head is null it means
+		// that an expansion of the hashtable is occurring
+		do
+		{
+			tmp_node = queue->future_list;
+			tmp_size = tmp_node->counter;
+			tmp = tmp_node->next;
+			new_node->next = tmp;
+		}
+		while(is_marked(tmp));
+
+		index = hash(new_node->timestamp, queue->bucket_width);
+	} while (index >= tmp_size
+			&& !(cas_result = CAS_x86(
+								(volatile unsigned long long *)&(tmp_node->next),
+								(unsigned long long) tmp,
+								(unsigned long long) new_node
+								)
+				)
+			);
+
+
+	// node connected in future list
+	if (!cas_result)
+	{
+		// node to be added in the hashtable
+		bucket = (bucket_node*)access_hashtable(queue->hashtable, index, queue->init_size, sizeof(bucket_node));
+
+		bool res = false;
+		do
+		{
+			res = try_search(queue, bucket, new_node->timestamp, new_node->generator, &left_node,
+					&right_node);
+			new_node->next = right_node;
+			new_node->counter = 1 + ( -D_EQUAL(new_node->timestamp, right_node->timestamp ) & right_node->counter );
+		} while (res && !CAS_x86(
+					(volatile unsigned long long*)&(left_node->next),
+					(unsigned long long) right_node,
+					(unsigned long long) new_node
+					)
+				);
+
+		if(!res)
+			mm_free(new_node);
+	}
+
+
+	end:
+	// Try to disconnect the head node
+	if(CAS_x86(
+				(volatile unsigned long long *)&(head->next),
+				(unsigned long long) get_marked(tmp),
+				(unsigned long long) get_marked(tmp_next)
+			)
+		)
+	{
+		connect_to_be_freed_list(queue, tmp, 1);
+	}
+	else
+	{
+		if(cas_result)
+			new_node->to_remove = 1;
+	}
+
+}
+
 
 /**
  * This function tries to remove one element from the top of the todo_list

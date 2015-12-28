@@ -258,7 +258,7 @@ void* process(void *arg)
 			else if(DATASTRUCT == 'C')
 				calqueue_put(timestamp, NULL);
 
-			local_min = timestamp;
+			//local_min = timestamp;
 
 			if( VERBOSE )
 				test_log(my_id, "%u-%d:%d\tENQUEUE %.15f - %u\n", my_id, (int)diff.tv_sec, (int)diff.tv_usec, timestamp, counter);
