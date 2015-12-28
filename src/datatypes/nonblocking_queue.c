@@ -454,6 +454,64 @@ static inline void flush_current(nonblocking_queue* queue, unsigned int index, b
 					);
 }
 
+
+/**
+ * This function commits a value in the current field of a queue. It retries until the timestamp
+ * associated with current is strictly less than the value that has to be committed
+ *
+ * @author Romolo Marotta
+ *
+ * @param queue the interested queue
+ * @param left_node the candidate node for being next current
+ *
+ */
+static inline void smart_flush_current(nonblocking_queue* queue, unsigned int index, bucket_node* node, bool was_empty)
+{
+	unsigned long long oldCur1;
+	unsigned long long oldCur2;
+	unsigned int oldIndex1;
+	unsigned int oldIndex2;
+	unsigned long long newCur =  ( ( unsigned long long ) index ) << 32;
+	newCur |= generate_mark();
+
+	// Retry until the left node has a timestamp strictly less than current and
+	// the CAS fails
+
+	oldCur1 = queue->current;
+	oldIndex1 = (unsigned int) (oldCur1 >> 32);
+
+	if(		was_empty &&
+			index <= oldIndex1 && !is_marked(node->next)
+			&& !CAS_x86(
+						(volatile unsigned long long *)&(queue->current),
+						(unsigned long long) oldCur1,
+						(unsigned long long) newCur
+						)
+					)
+
+	{
+
+		do
+		{
+			oldCur2 = queue->current;
+			oldIndex2 = (unsigned int) (oldCur2 >> 32);
+		}
+		while(
+					(index < oldIndex2)
+					&& !is_marked(node->next)
+					&& !CAS_x86(
+								(volatile unsigned long long *)&(queue->current),
+								(unsigned long long) oldCur2,
+								(unsigned long long) newCur
+								)
+							);
+
+	}
+
+}
+
+
+
 /**
  * This function insert a new event in the nonblocking queue.
  * The cost of this operation when succeeds should be O(1) as calendar queue
@@ -509,6 +567,74 @@ static bool insert(nonblocking_queue* queue, bucket_node* new_node)
 	{
 		search(queue, bucket, new_node->timestamp, &left_node,
 				&right_node);
+		new_node->next = right_node;
+		new_node->counter = 1 + ( -D_EQUAL(new_node->timestamp, right_node->timestamp ) & right_node->counter );
+	} while (!CAS_x86(
+				(volatile unsigned long long*)&(left_node->next),
+				(unsigned long long) right_node,
+				(unsigned long long) new_node
+				)
+			);
+	return true;
+}
+
+
+/**
+ * This function insert a new event in the nonblocking queue.
+ * The cost of this operation when succeeds should be O(1) as calendar queue
+ *
+ * @author Romolo Marotta
+ *
+ * @param queue the interested queue
+ * @param timestamp the timestamp of the event
+ * @param payload the event to be enqueued
+ *
+ */
+static bool smart_insert(nonblocking_queue* queue, bucket_node* new_node, bool *was_empty)
+{
+	bucket_node *left_node, *right_node, *tmp_node, *tmp, *bucket;
+	unsigned int index;
+	unsigned int tmp_size;
+	bool cas_result = false;
+
+	// Phase 1. Check if the hashtable cover the timestamp value. If not add the event in future list
+	do
+	{
+		// if the next of the future list head is null it means
+		// that an expansion of the hashtable is occurring
+		//do
+		{
+			tmp_node = queue->future_list;
+			tmp_size = tmp_node->counter;
+			tmp = tmp_node->next;
+			new_node->next = tmp;
+		}
+		//while(is_marked(tmp));
+		if(is_marked(tmp))
+			break;
+
+		index = hash(new_node->timestamp, queue->bucket_width);
+	} while (index >= tmp_size
+			&& !(cas_result = CAS_x86(
+								(volatile unsigned long long *)&(tmp_node->next),
+								(unsigned long long) tmp,
+								(unsigned long long) new_node
+								)
+				)
+			);
+
+	// node connected in future list
+	if (cas_result)
+		return false;
+
+	// node to be added in the hashtable
+	bucket = (bucket_node*)access_hashtable(queue->hashtable, index, queue->init_size, sizeof(bucket_node));
+
+	do
+	{
+		search(queue, bucket, new_node->timestamp, &left_node,
+				&right_node);
+		*was_empty = left_node == bucket && right_node == queue->tail;
 		new_node->next = right_node;
 		new_node->counter = 1 + ( -D_EQUAL(new_node->timestamp, right_node->timestamp ) & right_node->counter );
 	} while (!CAS_x86(
@@ -849,7 +975,7 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 
 	while (get_unmarked(tmp) != tail)
 	{
-		try_empty_todo_list(queue);
+		empty_todo_list(queue);
 		tmp = queue->todo_list->next;
 	}
 
@@ -924,11 +1050,12 @@ nonblocking_queue* queue_init(unsigned int queue_size, double bucket_width, unsi
 bool enqueue(nonblocking_queue* queue, double timestamp, void* payload)
 {
 	// allocates a new node
+	bool was_empty = false;
 	bucket_node *new_node = node_malloc(payload, timestamp);
-	bool res = insert(queue, new_node);
+	bool res = smart_insert(queue, new_node, &was_empty);
 	// Try to flush the new current if necessary
 	if(res)
-		flush_current(queue, hash(new_node->timestamp, queue->bucket_width), new_node);
+		smart_flush_current(queue, hash(new_node->timestamp, queue->bucket_width), new_node, was_empty);
 
 	// Collaborate in emptying the todo_list
 
