@@ -975,7 +975,7 @@ static bool expand_array(nonblocking_queue* queue, volatile unsigned int old_siz
 
 	while (get_unmarked(tmp) != tail)
 	{
-		empty_todo_list(queue);
+		try_empty_todo_list(queue);
 		tmp = queue->todo_list->next;
 	}
 
@@ -1070,7 +1070,7 @@ bool enqueue(nonblocking_queue* queue, double timestamp, void* payload)
 		tmp = tmp->next;
 		while (get_unmarked(tmp) != tail)
 		{
-			empty_todo_list(queue);
+			try_empty_todo_list(queue);
 			tmp = queue->todo_list;
 			tmp = tmp->next;
 		}

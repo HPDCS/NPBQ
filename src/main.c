@@ -85,27 +85,41 @@ void test_log(unsigned int my_id, const char *msg, ...) {
 	fwrite(buffer,1,  strlen(buffer), log_files[my_id]);
 }
 
-double uniform_rand(struct drand48_data *seed)
+
+
+double uniform_rand(struct drand48_data *seed, struct random_data *state)
 {
+	unsigned int random_int;
 	double random_num = 0.0;
-	drand48_r(seed, &random_num);
+	random_r(state, &random_int);
+	random_num = ((double)random_int) / RAND_MAX;
+	//drand48_r(seed, &random_num);
 	random_num *= MEAN_INTERARRIVAL_TIME*2;
 	return random_num;
 }
 
-double triangular_rand(struct drand48_data *seed)
+double triangular_rand(struct drand48_data *seed, struct random_data *state)
 {
 	double random_num = 0.0;
-	drand48_r(seed, &random_num);
+	unsigned int random_int;
+	random_r(state, &random_int);
+	random_num = ((double)random_int) / RAND_MAX;
+	//drand48_r(seed, &random_num);
 	random_num = sqrt(random_num);
 	random_num *= MEAN_INTERARRIVAL_TIME*3/2;
 	return random_num;
 }
 
-double exponential_rand(struct drand48_data *seed)
+double exponential_rand(struct drand48_data *seed, struct random_data *state)
 {
 	double random_num = 0.0;
-	drand48_r(seed, &random_num);
+	unsigned int random_int = 0;
+	while(D_EQUAL(random_num, 0.0))
+	{
+		random_r(state, &random_int);
+		random_num = ((double)random_int) / RAND_MAX;
+		//drand48_r(seed, &random_num);
+	}
 	random_num =  -log(random_num);
 	random_num *= MEAN_INTERARRIVAL_TIME;
 	return random_num;
@@ -116,10 +130,13 @@ void* process(void *arg)
 	struct timeval endTV, diff;
 	char name_file[128];
 	unsigned int my_id;
+	unsigned int random_int;
 	long long n_dequeue = 0;
 	long long n_enqueue = 0;
 	struct drand48_data seed;
+	struct random_data state;
 	double random_num = 0.0;
+
 	double local_min = 0.0;
 	long long tot_count = 0;
 	FILE  *f;
@@ -130,7 +147,8 @@ void* process(void *arg)
 	my_id =  *((unsigned int*)(arg));
 	lid = my_id;
 	sprintf(name_file, "%u.txt", my_id);
-	srand48_r(my_id, &seed);
+	//srand48_r(my_id, &seed);
+	srandom_r(my_id, &state);
 
 	if(VERBOSE)
 	{
@@ -142,11 +160,13 @@ void* process(void *arg)
 
 	while(tot_count < TOTAL_OPS)
 	{
-		gettimeofday(&endTV, NULL);
-		timersub(&endTV, &startTV, &diff);
+		//gettimeofday(&endTV, NULL);
+		//timersub(&endTV, &startTV, &diff);
 
 
-		drand48_r(&seed, &random_num);
+		//drand48_r(&seed, &random_num);
+		//random_r(&state, &random_int);
+		random_num = ((double)random_int) / RAND_MAX;
 
 		if( random_num < (PROB_DEQUEUE))
 		{
@@ -234,11 +254,11 @@ void* process(void *arg)
 			double update = 0.0;
 
 			if(PROB_DISTRIBUTION == 'U')
-				update = uniform_rand(&seed);
+				update = uniform_rand(&seed, &state);
 			else if(PROB_DISTRIBUTION == 'T')
-				update = triangular_rand(&seed);
+				update = triangular_rand(&seed, &state);
 			else if(PROB_DISTRIBUTION == 'E')
-				update = exponential_rand(&seed);
+				update = exponential_rand(&seed, &state);
 
 			timestamp = local_min;
 
@@ -284,7 +304,7 @@ void* process(void *arg)
 
 		}
 
-		if(my_id == 0 && ops_count[my_id]%(LOG_PERIOD) == 0 && LOG)
+		if(LOG && my_id == 0 && ops_count[my_id]%(LOG_PERIOD) == 0)
 		{
 			double min = INFTY;
 			unsigned int j =0;
@@ -307,7 +327,7 @@ void* process(void *arg)
 			tot_count += ops_count[j];
 	}
 
-	if(my_id == 0 && ops_count[my_id]%(LOG_PERIOD) == 0 && LOG)
+	if(LOG && my_id == 0 && ops_count[my_id]%(LOG_PERIOD) == 0)
 	{
 		double min = INFTY;
 		unsigned int j =0;
